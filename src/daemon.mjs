@@ -15,9 +15,6 @@ process.on('uncaughtException', (err) => {
 const { UNIREP_ADDRESS, ETH_PROVIDER_URL, ATTESTER_ADDRESS, PRIVATE_KEY  } =
   Object.assign(process.env, {
     ATTESTER_ADDRESS: 0,
-    PRIVATE_KEY: '0xde9be858da4a475276426320d5e9262ecfc3ba460bfac56360bfa6c4c28b4ee0',
-    ETH_PROVIDER_URL: 'http://localhost:8545',
-    UNIREP_ADDRESS: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e'
   })
 const provider = ETH_PROVIDER_URL.startsWith('http')
   ? new ethers.providers.JsonRpcProvider(ETH_PROVIDER_URL)
