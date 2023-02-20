@@ -152,7 +152,7 @@ export class TransactionManager {
       to,
       // gasPrice: 2 * 10 ** 9, // 2 gwei
       // gasPrice: 10000,
-      gasPrice: 299365979,
+      gasPrice: await this.wallet.provider.getGasPrice(),
       ...args,
     })
     await this._db?.create('AccountTransaction', {
