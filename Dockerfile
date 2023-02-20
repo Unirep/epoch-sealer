@@ -14,7 +14,7 @@ RUN git clone https://github.com/iden3/rapidsnark.git && \
     npx task createFieldSources && \
     npx task buildProver
 
-# |=================================[ canon build stage ]===============================================|
+# |=================================[ sealer build stage ]===============================================|
 # Build stage for unirep source (custom branch checkout)
 FROM node:16-buster-slim as sealer-builder
 
@@ -29,14 +29,17 @@ RUN yarn
 
 # Load unirep beta
 RUN sh scripts/loadUnirepBeta.sh
+# Load proving keys
+RUN sh scripts/loadKeys.sh
 
 # |=================================[ final stage ]===============================================|
 FROM node:16-buster-slim as daemon
+RUN apt-get update && apt-get install -y libsodium-dev libgmp-dev libgomp1
 
 # Copy canon from canon-builder stage
 COPY --from=sealer-builder /src /src
 
 # Copy rapidsnark from rapidsnark-builder stage
-COPY --from=rapidsnark-builder /rapidsnark/build/prover /usr/local/bin/rapidsnark
+COPY --from=rapidsnark-builder /rapidsnark/build/prover /bin/rapidsnark
 
-CMD ['node', '/src/src/daemon.mjs']
+CMD ["node", "/src/src/daemon.mjs"]

@@ -10,6 +10,6 @@
   "license": "MIT",
   "dependencies": {
     "@unirep/core": "2.0.0-alpha-3",
-    "ethers": "^6.0.5"
+    "ethers": "^5.7.0"
   }
 }

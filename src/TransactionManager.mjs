@@ -1,10 +1,12 @@
 import { ethers } from 'ethers'
-import { MemoryConnector } from 'anondb/web'
+import { nanoid } from 'nanoid'
+import { MemoryConnector } from 'anondb/web.js'
+import { constructSchema } from 'anondb/types.js'
 
 export class TransactionManager {
   configure(key, provider) {
     this.wallet = new ethers.Wallet(key, provider)
-    this._db = new MemoryConnector([
+    this._db = new MemoryConnector(constructSchema([
       {
         name: 'AccountTransaction',
         primaryKey: 'signedData',
@@ -22,7 +24,7 @@ export class TransactionManager {
           ['nonce', 'Int'],
         ],
       },
-    ])
+    ]))
   }
 
   async start() {

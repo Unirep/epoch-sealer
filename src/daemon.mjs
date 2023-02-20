@@ -1,13 +1,24 @@
 import { Synchronizer, schema } from '@unirep/core'
-import { Circuit, BuildOrderedTree } from '@unirep/core'
-import { SQLiteConnector } from 'anondb/node'
-import TransactionManager from './singletons/TransactionManager.mjs'
+import { Circuit, BuildOrderedTree } from '@unirep/circuits'
+import { stringifyBigInts } from '@unirep/utils'
+import { SQLiteConnector } from 'anondb/node.js'
+import { ethers } from 'ethers'
+import TransactionManager from './TransactionManager.mjs'
+import prover from './prover.mjs'
 
-const { UNIREP_ADDRESS, ETH_PROVIDER_URL, ATTESTER_ADDRESS, PRIVATE_KEY } =
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception!')
+  console.error(err)
+  process.exit(1)
+})
+
+const { UNIREP_ADDRESS, ETH_PROVIDER_URL, ATTESTER_ADDRESS, PRIVATE_KEY  } =
   Object.assign(process.env, {
     ATTESTER_ADDRESS: 0,
+    PRIVATE_KEY: '0xde9be858da4a475276426320d5e9262ecfc3ba460bfac56360bfa6c4c28b4ee0',
+    ETH_PROVIDER_URL: 'http://localhost:8545',
+    UNIREP_ADDRESS: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e'
   })
-
 const provider = ETH_PROVIDER_URL.startsWith('http')
   ? new ethers.providers.JsonRpcProvider(ETH_PROVIDER_URL)
   : new ethers.providers.WebSocketProvider(ETH_PROVIDER_URL)
@@ -15,14 +26,14 @@ const provider = ETH_PROVIDER_URL.startsWith('http')
 TransactionManager.configure(PRIVATE_KEY, provider)
 await TransactionManager.start()
 
-const db = new SQLiteConnector(schema, ':memory:')
+const db = await SQLiteConnector.create(schema, ':memory:')
 
 const synchronizer = new Synchronizer({
   prover: {}, // TODO: remove this from the synchronizer
   unirepAddress: UNIREP_ADDRESS,
   provider,
   db,
-  attesterId: BigInt(ATTESTER_ID),
+  attesterId: BigInt(ATTESTER_ADDRESS),
 })
 await synchronizer.start()
 await synchronizer.waitForSync()
@@ -44,6 +55,11 @@ for (;;) {
 }
 
 async function sync() {
+  if (synchronizer.provider.network.chainId === 31337) {
+    // hardhat dev nodes need to have their state refreshed manually
+    // for view only functions
+    await synchronizer.provider.send('evm_mine', [])
+  }
   const attesters = await synchronizer._db.findMany('Attester', {
     where:
       synchronizer.attesterId === BigInt(0)
@@ -62,7 +78,7 @@ async function syncAttester(attester) {
   const now = Math.floor(+new Date() / 1000)
   const currentEpoch = Math.max(
     0,
-    Math.floor(now - startTimestamp) / epochLength
+    Math.floor((now - startTimestamp) / +epochLength)
   )
   for (let x = latestSyncedByAttesterId[_id] ?? 0; x < currentEpoch; x++) {
     const isSealed = await synchronizer.unirepContract.attesterEpochSealed(
@@ -85,7 +101,10 @@ async function buildAndSubmit(epoch, attesterId) {
     attesterId
   )
   const { circuitInputs } = await BuildOrderedTree.buildInputsForLeaves(
-    leafPreimages
+    leafPreimages,
+    synchronizer.settings.epochTreeArity,
+    synchronizer.settings.epochTreeDepth,
+    synchronizer.settings.fieldCount,
   )
   const r = await prover.genProofAndPublicSignals(
     Circuit.buildOrderedTree,
@@ -99,9 +118,14 @@ async function buildAndSubmit(epoch, attesterId) {
     'sealEpoch',
     [epoch, attesterId, publicSignals, proof]
   )
-  const hash = await TransactionManager.queueTransaction(
-    synchronizer.unirepContract.address,
-    calldata
-  )
-  await synchronizer.provider.waitForTransaction(hash)
+  try {
+    const hash = await TransactionManager.queueTransaction(
+      synchronizer.unirepContract.address,
+      calldata
+    )
+    await synchronizer.provider.waitForTransaction(hash)
+  } catch (err) {
+    console.warn('Error queueing transaction')
+    console.warn(err)
+  }
 }
