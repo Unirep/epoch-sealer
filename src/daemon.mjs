@@ -78,6 +78,16 @@ async function syncAttester(attester) {
     Math.floor((now - startTimestamp) / +epochLength)
   )
   for (let x = latestSyncedByAttesterId[_id] ?? 0; x < currentEpoch; x++) {
+    const attestations = await synchronizer._db.findMany('Attestation', {
+      where: {
+        attesterId: _id.toString(),
+        epoch: x,
+      }
+    })
+    if (attestations.length === 0) {
+      latestSyncedByAttesterId[_id] = x
+      continue
+    }
     const isSealed = await synchronizer.unirepContract.attesterEpochSealed(
       _id,
       x
